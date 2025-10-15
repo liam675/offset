@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Roblox Offsets Monitor</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background-color: #1e1e1e;
+            color: #00ff00;
+            margin: 0;
+            padding: 20px;
+        }
+        h1 {
+            text-align: center;
+            color: #ffffff;
+        }
+        #status {
+            text-align: center;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+        #data {
+            background-color: #2d2d2d;
+            border: 1px solid #00ff00;
+            padding: 15px;
+            white-space: pre-wrap;
+            max-height: 70vh;
+            overflow-y: auto;
+            font-size: 12px;
+        }
+        button {
+            background-color: #00ff00;
+            color: #000;
+            border: none;
+            padding: 10px 20px;
+            cursor: pointer;
+            margin: 10px;
+            font-family: inherit;
+        }
+        button:hover {
+            background-color: #00cc00;
+        }
+        .last-update {
+            text-align: center;
+            color: #888;
+            font-size: 12px;
+        }
+        #proxy-note {
+            text-align: center;
+            color: #ffaa00;
+            font-size: 12px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Roblox Offsets Monitor</h1>
+    <div id="status">Loading...</div>
+    <div id="proxy-note">Tip: If 403 error, visit <a href="https://cors-anywhere.herokuapp.com/corsdemo" target="_blank" style="color: #ffaa00;">this link</a> and click "Request temporary access".</div>
+    <button onclick="loadData()">Refresh Now</button>
+    <button onclick="testDirect()">Test Direct URL</button>
+    <button onclick="toggleAuto()">Pause Auto-Update</button>
+    <div class="last-update" id="last-update">Last update: Never</div>
+    <div id="data"></div>
+
+    <script>
+        const PRIMARY_URL = 'https://offsets.ntgetwritewatch.workers.dev/offsets.json';
+        const PROXY_URL = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(PRIMARY_URL); // Alternative proxy (no activation needed)
+        let currentData = null;
+        let autoUpdate = true;
+        let intervalId = null;
+
+        function updateStatus(message, isError = false) {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = message;
+            statusEl.style.color = isError ? '#ff0000' : '#00ff00';
+        }
+
+        function updateLastUpdate() {
+            document.getElementById('last-update').textContent = `Last update: ${new Date().toLocaleString()}`;
+        }
+
+        function displayData(data) {
+            const dataEl = document.getElementById('data');
+            dataEl.textContent = JSON.stringify(data, null, 2);
+        }
+
+        async function fetchWithUrl(url, urlLabel) {
+            try {
+                const response = await fetch(url, { mode: 'cors' });
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                return await response.json();
+            } catch (error) {
+                throw new Error(`${urlLabel} failed: ${error.message}`);
+            }
+        }
+
+        async function fetchData(url = PRIMARY_URL, isTest = false) {
+            try {
+                updateStatus('Fetching data...');
+                let newData;
+                let usedUrl = PRIMARY_URL;
+                try {
+                    newData = await fetchWithUrl(url, 'Direct');
+                } catch (directError) {
+                    if (!isTest) {
+                        updateStatus(`Direct failed: ${directError.message}. Trying proxy...`, true);
+                        newData = await fetchWithUrl(PROXY_URL, 'Proxy');
+                        usedUrl = PROXY_URL;
+                    } else {
+                        throw directError;
+                    }
+                }
+
+                updateLastUpdate();
+
+                if (currentData === null) {
+                    currentData = newData;
+                    displayData(currentData);
+                    updateStatus(`Data loaded via ${usedUrl === PRIMARY_URL ? 'direct' : 'proxy'}. Auto-updating every 10 minutes.`);
+                } else {
+                    if (JSON.stringify(currentData) !== JSON.stringify(newData)) {
+                        currentData = newData;
+                        displayData(currentData);
+                        updateStatus('Data updated! Changes detected.');
+                        if (Notification.permission === 'granted') {
+                            new Notification('Offsets Updated!');
+                        }
+                    } else {
+                        updateStatus('No changes detected. Auto-updating every 10 minutes.');
+                    }
+                }
+            } catch (error) {
+                console.error('Error fetching data:', error);
+                updateStatus(`Error: ${error.message}`, true);
+                if (error.message.includes('Network') && !intervalId) {
+                    setTimeout(() => fetchData(PRIMARY_URL), 5000);
+                }
+            }
+        }
+
+        function testDirect() {
+            updateStatus('Testing direct URL...');
+            fetchData(PRIMARY_URL, true).catch(() => {}); // Don't fallback for test
+        }
+
+        function toggleAuto() {
+            autoUpdate = !autoUpdate;
+            const btn = event.target;
+            btn.textContent = autoUpdate ? 'Pause Auto-Update' : 'Resume Auto-Update';
+            if (autoUpdate && !intervalId) {
+                intervalId = setInterval(() => fetchData(PRIMARY_URL), 10 * 60 * 1000);
+            } else if (!autoUpdate && intervalId) {
+                clearInterval(intervalId);
+                intervalId = null;
+            }
+        }
+
+        function loadData() {
+            fetchData(PRIMARY_URL);
+        }
+
+        // Initial load
+        fetchData(PRIMARY_URL);
+
+        // Start auto-update
+        intervalId = setInterval(() => fetchData(PRIMARY_URL), 10 * 60 * 1000);
+
+        // Request notification permission
+        if (Notification.permission === 'default') {
+            Notification.requestPermission();
+        }
+    </script>
+</body>
+</html>
