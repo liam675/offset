@@ -6,174 +6,161 @@
     <title>Roblox Offsets Monitor</title>
     <style>
         body {
-            font-family: 'Courier New', monospace;
-            background-color: #1e1e1e;
-            color: #00ff00;
             margin: 0;
             padding: 20px;
+            background: linear-gradient(45deg, #ff00ff, #ff69b4, #00ffff);
+            min-height: 100vh;
+            font-family: 'Arial', sans-serif;
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
         }
         h1 {
             text-align: center;
-            color: #ffffff;
+            color: #ff00ff;
+            font-size: 2.5em;
+            margin-bottom: 20px;
+        }
+        .container {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .option {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid #ff00ff;
+            border-radius: 10px;
+            padding: 15px;
+            width: 180px;
+            text-align: center;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            cursor: pointer;
+        }
+        .option:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 15px rgba(255, 105, 180, 0.5);
+        }
+        .option i {
+            font-size: 1.5em;
+            color: #ff00ff;
+            margin-bottom: 10px;
+        }
+        .option span {
+            display: block;
+            font-size: 1em;
+            color: #fff;
         }
         #status {
             text-align: center;
+            font-size: 1.2em;
             margin-bottom: 20px;
-            font-weight: bold;
+            color: #ff69b4;
         }
         #data {
-            background-color: #2d2d2d;
-            border: 1px solid #00ff00;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid #ff00ff;
+            border-radius: 5px;
             padding: 15px;
+            margin-top: 20px;
             white-space: pre-wrap;
-            max-height: 70vh;
+            max-height: 60vh;
             overflow-y: auto;
             font-size: 12px;
-        }
-        button {
-            background-color: #00ff00;
-            color: #000;
-            border: none;
-            padding: 10px 20px;
-            cursor: pointer;
-            margin: 10px;
-            font-family: inherit;
-        }
-        button:hover {
-            background-color: #00cc00;
+            color: #fff;
+            width: 80%;
+            max-width: 800px;
         }
         .last-update {
             text-align: center;
-            color: #888;
+            color: #ff69b4;
             font-size: 12px;
-        }
-        #proxy-note {
-            text-align: center;
-            color: #ffaa00;
-            font-size: 12px;
-            margin: 10px 0;
+            margin-top: 10px;
         }
     </style>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
 </head>
 <body>
     <h1>Roblox Offsets Monitor</h1>
     <div id="status">Loading...</div>
-    <div id="proxy-note">Tip: If 403 error, visit <a href="https://cors-anywhere.herokuapp.com/corsdemo" target="_blank" style="color: #ffaa00;">this link</a> and click "Request temporary access".</div>
-    <button onclick="loadData()">Refresh Now</button>
-    <button onclick="testDirect()">Test Direct URL</button>
-    <button onclick="toggleAuto()">Pause Auto-Update</button>
+    <div class="container">
+        <div class="option" onclick="loadData('https://offsets.ntgetwritewatch.workers.dev/offsets.hpp', 'offsets.hpp')">
+            <i class="fas fa-file-code"></i>
+            <span>offsets.hpp</span>
+        </div>
+        <div class="option" onclick="loadData('https://offsets.ntgetwritewatch.workers.dev/offsets.json', 'offsets.json')">
+            <i class="fas fa-code"></i>
+            <span>offsets.json</span>
+        </div>
+        <div class="option" onclick="loadData('https://offsets.ntgetwritewatch.workers.dev/version', 'version')">
+            <i class="fas fa-info-circle"></i>
+            <span>Version</span>
+        </div>
+    </div>
     <div class="last-update" id="last-update">Last update: Never</div>
     <div id="data"></div>
 
     <script>
-        const PRIMARY_URL = 'https://offsets.ntgetwritewatch.workers.dev/offsets.json';
-        const PROXY_URL = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(PRIMARY_URL); // Alternative proxy (no activation needed)
         let currentData = null;
-        let autoUpdate = true;
-        let intervalId = null;
+        let currentUrl = 'https://offsets.ntgetwritewatch.workers.dev/offsets.json';
 
-        function updateStatus(message, isError = false) {
+        function updateStatus(message) {
             const statusEl = document.getElementById('status');
             statusEl.textContent = message;
-            statusEl.style.color = isError ? '#ff0000' : '#00ff00';
         }
 
         function updateLastUpdate() {
             document.getElementById('last-update').textContent = `Last update: ${new Date().toLocaleString()}`;
         }
 
-        function displayData(data) {
+        function displayData(data, url) {
             const dataEl = document.getElementById('data');
-            dataEl.textContent = JSON.stringify(data, null, 2);
-        }
-
-        async function fetchWithUrl(url, urlLabel) {
-            try {
-                const response = await fetch(url, { mode: 'cors' });
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
-                return await response.json();
-            } catch (error) {
-                throw new Error(`${urlLabel} failed: ${error.message}`);
+            if (url.endsWith('.hpp')) {
+                dataEl.textContent = data; // Raw text for .hpp
+            } else if (url.endsWith('.json')) {
+                dataEl.textContent = JSON.stringify(data, null, 2); // Pretty-print JSON
+            } else if (url.endsWith('version')) {
+                dataEl.textContent = data; // Raw text for version
             }
         }
 
-        async function fetchData(url = PRIMARY_URL, isTest = false) {
-            try {
-                updateStatus('Fetching data...');
-                let newData;
-                let usedUrl = PRIMARY_URL;
-                try {
-                    newData = await fetchWithUrl(url, 'Direct');
-                } catch (directError) {
-                    if (!isTest) {
-                        updateStatus(`Direct failed: ${directError.message}. Trying proxy...`, true);
-                        newData = await fetchWithUrl(PROXY_URL, 'Proxy');
-                        usedUrl = PROXY_URL;
-                    } else {
-                        throw directError;
-                    }
-                }
+        async function fetchData(url, urlLabel) {
+            updateStatus(`Fetching ${urlLabel}...`);
+            const response = await fetch(url, { mode: 'cors' });
+            const newData = url.endsWith('.json') ? await response.json() : await response.text();
+            updateLastUpdate();
+            currentUrl = url;
 
-                updateLastUpdate();
-
-                if (currentData === null) {
+            if (currentData === null) {
+                currentData = newData;
+                displayData(currentData, url);
+                updateStatus(`${urlLabel} loaded.`);
+            } else {
+                if (JSON.stringify(currentData) !== JSON.stringify(newData) && url.endsWith('.json')) {
                     currentData = newData;
-                    displayData(currentData);
-                    updateStatus(`Data loaded via ${usedUrl === PRIMARY_URL ? 'direct' : 'proxy'}. Auto-updating every 10 minutes.`);
+                    displayData(currentData, url);
+                    updateStatus(`${urlLabel} updated! Changes detected.`);
+                } else if (currentData !== newData && !url.endsWith('.json')) {
+                    currentData = newData;
+                    displayData(currentData, url);
+                    updateStatus(`${urlLabel} updated! Changes detected.`);
                 } else {
-                    if (JSON.stringify(currentData) !== JSON.stringify(newData)) {
-                        currentData = newData;
-                        displayData(currentData);
-                        updateStatus('Data updated! Changes detected.');
-                        if (Notification.permission === 'granted') {
-                            new Notification('Offsets Updated!');
-                        }
-                    } else {
-                        updateStatus('No changes detected. Auto-updating every 10 minutes.');
-                    }
-                }
-            } catch (error) {
-                console.error('Error fetching data:', error);
-                updateStatus(`Error: ${error.message}`, true);
-                if (error.message.includes('Network') && !intervalId) {
-                    setTimeout(() => fetchData(PRIMARY_URL), 5000);
+                    updateStatus(`No changes in ${urlLabel}.`);
                 }
             }
         }
 
-        function testDirect() {
-            updateStatus('Testing direct URL...');
-            fetchData(PRIMARY_URL, true).catch(() => {}); // Don't fallback for test
+        function loadData(url, label) {
+            fetchData(url, label);
         }
 
-        function toggleAuto() {
-            autoUpdate = !autoUpdate;
-            const btn = event.target;
-            btn.textContent = autoUpdate ? 'Pause Auto-Update' : 'Resume Auto-Update';
-            if (autoUpdate && !intervalId) {
-                intervalId = setInterval(() => fetchData(PRIMARY_URL), 10 * 60 * 1000);
-            } else if (!autoUpdate && intervalId) {
-                clearInterval(intervalId);
-                intervalId = null;
-            }
-        }
-
-        function loadData() {
-            fetchData(PRIMARY_URL);
-        }
+        // Check every second on refresh
+        setInterval(() => fetchData(currentUrl, currentUrl.split('/').pop()), 1000);
 
         // Initial load
-        fetchData(PRIMARY_URL);
-
-        // Start auto-update
-        intervalId = setInterval(() => fetchData(PRIMARY_URL), 10 * 60 * 1000);
-
-        // Request notification permission
-        if (Notification.permission === 'default') {
-            Notification.requestPermission();
-        }
+        fetchData('https://offsets.ntgetwritewatch.workers.dev/offsets.json', 'offsets.json');
     </script>
 </body>
 </html>
