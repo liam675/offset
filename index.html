@@ -127,28 +127,37 @@
         }
 
         async function fetchData(url, urlLabel) {
-            updateStatus(`Fetching ${urlLabel}...`);
-            const response = await fetch(url, { mode: 'cors' });
-            const newData = url.endsWith('.json') ? await response.json() : await response.text();
-            updateLastUpdate();
-            currentUrl = url;
-
-            if (currentData === null) {
-                currentData = newData;
-                displayData(currentData, url);
-                updateStatus(`${urlLabel} loaded.`);
-            } else {
-                if (JSON.stringify(currentData) !== JSON.stringify(newData) && url.endsWith('.json')) {
-                    currentData = newData;
-                    displayData(currentData, url);
-                    updateStatus(`${urlLabel} updated! Changes detected.`);
-                } else if (currentData !== newData && !url.endsWith('.json')) {
-                    currentData = newData;
-                    displayData(currentData, url);
-                    updateStatus(`${urlLabel} updated! Changes detected.`);
-                } else {
-                    updateStatus(`No changes in ${urlLabel}.`);
+            try {
+                updateStatus(`Fetching ${urlLabel}...`);
+                console.log(`Attempting fetch from: ${url}`);
+                const response = await fetch(url, { mode: 'cors' });
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
                 }
+                const newData = url.endsWith('.json') ? await response.json() : await response.text();
+                updateLastUpdate();
+                currentUrl = url;
+
+                if (currentData === null) {
+                    currentData = newData;
+                    displayData(currentData, url);
+                    updateStatus(`${urlLabel} loaded.`);
+                } else {
+                    if (JSON.stringify(currentData) !== JSON.stringify(newData) && url.endsWith('.json')) {
+                        currentData = newData;
+                        displayData(currentData, url);
+                        updateStatus(`${urlLabel} updated! Changes detected.`);
+                    } else if (currentData !== newData && !url.endsWith('.json')) {
+                        currentData = newData;
+                        displayData(currentData, url);
+                        updateStatus(`${urlLabel} updated! Changes detected.`);
+                    } else {
+                        updateStatus(`No changes in ${urlLabel}.`);
+                    }
+                }
+            } catch (error) {
+                console.error('Fetch error:', error);
+                updateStatus(`Error: ${error.message}. Check console for details.`);
             }
         }
 
